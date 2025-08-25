@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced AI: Full-Screen Chat</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Deep gray/black background */
+            color: #e2e8f0; /* Light text color */
+            display: flex;
+            flex-direction: column; /* Align content vertically */
+            justify-content: space-between; /* Space out content top and bottom */
+            align-items: center;
+            min-height: 100vh; /* Full screen height */
+            margin: 0;
+            padding: 0;
+        }
+        .main-container {
+            flex-grow: 1; /* Main content takes available space */
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center; /* Center content */
+            align-items: center;
+            padding: 1rem; /* Small padding */
+            position: relative;
+        }
+        .chat-area {
+            flex-grow: 1; /* Chat area takes available space */
+            width: 100%;
+            max-width: 900px; /* Max width of chat */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end; /* Chat messages start from bottom */
+            overflow: hidden; /* Keep chat messages within container */
+        }
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            padding: 1rem;
+            background-color: transparent; /* Transparent background */
+            border-radius: 0.75rem;
+            max-height: calc(100vh - 150px - 100px); /* Space for input, header, and live output */
+        }
+        .message {
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0.75rem;
+            max-width: 75%; /* Slightly reduced message width */
+            display: flex;
+            align-items: center;
+        }
+        .user-message {
+            background-color: #4299e1; /* Blue */
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        .ai-message {
+            background-color: #4a5568; /* Dark gray */
+            color: #e2e8f0; /* Light gray */
+            align-self: flex-start;
+            margin-right: auto;
+        }
+        .listen-button {
+            margin-left: 0.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #a0aec0;
+            padding: 0.25rem;
+            border-radius: 50%;
+            transition: background-color 0.2s ease;
+        }
+        .listen-button:hover {
+            background-color: #718096;
+        }
+        .input-area {
+            width: 100%;
+            max-width: 900px;
+            background-color: #2d3748; /* Input area background */
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            margin-top: 1rem;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4299e1;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
+        }
+        /* Live Output Display Area */
+        #liveOutputDisplay {
+            width: 100%;
+            max-width: 900px;
+            min-height: 100px;
+            background-color: #2d3748;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #4a5568;
+        }
+        #liveOutputDisplay pre {
+            background-color: #2d2d2d !important;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 300px; /* Live preview for code */
+            width: 100%;
+        }
+        #liveOutputDisplay code {
+            font-family: 'Fira Code', 'Monaco', 'Consolas', 'monospace';
+            color: #f8f8f2;
+        }
+        #liveOutputDisplay img {
+            max-width: 100%;
+            max-height: 300px; /* Live preview for image */
+            height: auto;
+            border-radius: 0.5rem;
+            display: block;
+            margin: 0 auto;
+            object-fit: contain;
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: #1a202c; /* Modal background */
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            color: #e2e8f0;
+        }
+        .close-button {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            color: #a0aec0;
+            font-size: 1.8rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        .modal-code-display pre {
+            background-color: #2d2d2d !important;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .modal-code-display code {
+            font-family: 'Fira Code', 'Monaco', 'Consolas', 'monospace';
+            color: #f8f8f2;
+        }
+        .modal-image-display img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            display: block;
+            margin: 0 auto;
+        }
+        .modal-iframe {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #4a5568;
+            border-radius: 0.5rem;
+            background-color: white; /* iframe background */
+        }
+        
+        /* Mobile adjustments */
+        @media (max-width: 640px) {
+            .input-area .flex-row {
+                flex-direction: column;
+            }
+            .input-area .flex-row > button {
+                width: 100%;
+            }
+            .message {
+                max-width: 90%; /* Messages take more space on mobile */
+            }
+            .chat-messages {
+                max-height: calc(100vh - 180px - 100px); /* Adjust height on mobile */
+            }
+            .modal-content {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="flex flex-col">
+    <!-- Header (Optional, but good for branding) -->
+    <header class="w-full bg-gray-900 p-4 flex justify-between items-center text-gray-400">
+        <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.977 12h18.046" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2.977V21.023" />
+            </svg>
+            <span class="text-xl font-semibold text-gray-200">Advanced AI</span>
+        </div>
+        <button class="flex items-center gap-2 text-blue-400 hover:text-blue-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zM8.707 11.707a1 1 0 001.414 0L12 10.414l.879.879a1 1 0 001.414-1.414l-1.5-1.5a1 1 0 00-1.414 0l-1.5 1.5a1 1 0 000 1.414z" clip-rule="evenodd" />
+            </svg>
+            <span>Upgrade to Go</span>
+        </button>
+    </header>
+
+    <div class="main-container">
+        <div class="chat-area">
+            <div id="initialGreeting" class="text-center text-3xl font-bold text-gray-300 mb-8" style="flex-grow: 1; display: flex; align-items: center; justify-content: center;">
+                What can I help with?
+            </div>
+            <div id="chatMessages" class="chat-messages hidden">
+                <!-- Chat messages will be appended here -->
+            </div>
+        </div>
+
+        <!-- Live Output Display Area (Code/Image Preview) -->
+        <div id="liveOutputDisplay" class="hidden">
+            <p id="liveOutputPlaceholder" class="text-gray-400">Generated code or image will appear here.</p>
+            <div id="liveCodePreview" class="w-full hidden">
+                <pre class="h-full"><code id="liveGeneratedCode" class="language-html"></code></pre>
+                <div class="flex justify-center gap-2 mt-3">
+                    <button id="viewCodeInModalBtn" class="bg-gray-700 text-white px-4 py-2 rounded-md shadow hover:bg-gray-800 transition duration-200 text-sm flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        View in Larger Modal
+                    </button>
+                    <button id="livePreviewCodeBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md shadow hover:bg-blue-700 transition duration-300 ease-in-out text-sm flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        Preview Code
+                    </button>
+                </div>
+            </div>
+            <div id="liveImagePreview" class="w-full hidden text-center">
+                <img id="liveGeneratedImage" src="" alt="Preview of generated image" class="block max-w-full h-auto mx-auto my-2 rounded-lg">
+                <div class="flex justify-center gap-2 mt-3">
+                     <button id="viewImageInModalBtn" class="bg-gray-700 text-white px-4 py-2 rounded-md shadow hover:bg-gray-800 transition duration-200 text-sm flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        View in Larger Modal
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Loading or error message from AI -->
+        <div id="statusMessage" class="text-center mt-4 text-gray-400 hidden flex items-center justify-center gap-2">
+            <div id="loadingSpinner" class="loading-spinner hidden"></div>
+            <span id="statusText"></span>
+        </div>
+
+        <!-- Input and action buttons -->
+        <div class="input-area flex items-center gap-3">
+            <input type="text" id="promptInput"
+                   class="flex-grow p-4 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-900 text-gray-100 placeholder-gray-400 text-base"
+                   placeholder="Ask anything">
+            <button id="chatBtn"
+                    class="bg-blue-600 text-white p-3 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-300 ease-in-out">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+            </button>
+            <button id="micBtn"
+                    class="bg-gray-700 text-white p-3 rounded-lg shadow-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-600 focus:ring-offset-2 transition duration-300 ease-in-out">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0v-1a7 7 0 0114 0v1z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18v3m-3-3h6M5 10H4a2 2 0 00-2 2v2a2 2 0 002 2h1m14-6h1a2 2 0 012 2v2a2 2 0 01-2 2h-1" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Additional action buttons (hidden on mobile, visible on desktop, or in a modal) -->
+        <div class="flex justify-center gap-3 mt-4 w-full max-w-lg hidden md:flex">
+            <button id="generateCodeBtn"
+                    class="flex-1 bg-indigo-600 text-white px-5 py-3 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-300 ease-in-out font-medium text-lg flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                Generate Code
+            </button>
+            <button id="generateImageBtn"
+                    class="flex-1 bg-green-600 text-white px-5 py-3 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-300 ease-in-out font-medium text-lg flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-4 4 4 4-4V5h-2a1 1 0 00-1 1v2a1 1 0 102 0V6a3 3 0 00-3-3H5a3 3 0 00-3 3v9a3 3 0 003 3h10a3 3 0 003-3V5a3 3 0 00-3-3H5z" clip-rule="evenodd" />
+                </svg>
+                Generate Image
+            </button>
+        </div>
+    </div>
+
+    <!-- Code Output Modal (now for larger view) -->
+    <div id="codeOutputModal" class="modal hidden">
+        <div class="modal-content w-full max-w-4xl">
+            <button class="close-button" id="closeCodeModal">&times;</button>
+            <h3 class="text-xl font-bold mb-3 text-center">Generated Code (Full View)</h3>
+            <div class="flex justify-end gap-2 mb-3">
+                <button id="copyCodeBtn" class="bg-gray-700 text-white px-4 py-2 rounded-md shadow hover:bg-gray-800 transition duration-200 text-sm flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2.586m-4.414-4.414L9 10m4.556-4.556L15 8m0 0l-1.5-1.5m0 0l-1.5 1.5M10 11.5l1.5-1.5m0 0l-1.5 1.5" /></svg>
+                    Copy
+                </button>
+                <button id="downloadCodeBtn" class="bg-gray-700 text-white px-4 py-2 rounded-md shadow hover:bg-gray-800 transition duration-200 text-sm flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download
+                </button>
+                <button id="modalPreviewCodeBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md shadow hover:bg-blue-700 transition duration-200 text-sm flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    Preview
+                </button>
+            </div>
+            <div class="modal-code-display flex-grow">
+                <pre class="h-full"><code id="modalGeneratedCode" class="language-html"></code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Code Preview Modal (for iframe only) -->
+    <div id="codePreviewModal" class="modal hidden">
+        <div class="modal-content w-full max-w-4xl h-3/4 flex flex-col">
+            <button class="close-button" id="closePreviewModal">&times;</button>
+            <h3 class="text-xl font-bold mb-3 text-center">Code Preview (Live)</h3>
+            <iframe id="previewIframe" class="modal-iframe flex-grow"></iframe>
+        </div>
+    </div>
+
+    <!-- Image Output Modal (now for larger view and download) -->
+    <div id="imageOutputModal" class="modal hidden">
+        <div class="modal-content w-full max-w-2xl">
+            <button class="close-button" id="closeImageModal">&times;</button>
+            <h3 class="text-xl font-bold mb-3 text-center">Generated Image (Full View)</h3>
+            <div class="modal-image-display flex flex-col items-center gap-4">
+                <img id="modalGeneratedImage" src="" alt="Generated image">
+                <p id="modalImagePlaceholder" class="text-gray-400 text-lg text-center hidden">Image is being generated...</p>
+                <div class="flex justify-center gap-3 mt-4">
+                    <button id="downloadImageBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md shadow hover:bg-blue-700 transition duration-200 text-sm flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Download Image
+                    </button>
+                    <button id="fullscreenImageBtn" class="bg-purple-600 text-white px-4 py-2 rounded-md shadow hover:bg-purple-700 transition duration-200 text-sm flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0 0h-4m0 0l-5 5M20 16v4m0 0h-4m0 0l-5-5M4 16h4m0 0l5 5m-5-5V4" /></svg>
+                        Full Screen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = ""; // Keep API key empty; Canvas will provide it at runtime.
+
+        // DOM Elements
+        const promptInput = document.getElementById('promptInput');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatBtn = document.getElementById('chatBtn');
+        const micBtn = document.getElementById('micBtn');
+        const initialGreeting = document.getElementById('initialGreeting');
+
+        const generateCodeBtn = document.getElementById('generateCodeBtn');
+        const generateImageBtn = document.getElementById('generateImageBtn');
+
+        const statusMessage = document.getElementById('statusMessage');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const statusText = document.getElementById('statusText');
+
+        // Live Output Display Elements
+        const liveOutputDisplay = document.getElementById('liveOutputDisplay');
+        const liveOutputPlaceholder = document.getElementById('liveOutputPlaceholder');
+        const liveCodePreview = document.getElementById('liveCodePreview');
+        const liveGeneratedCode = document.getElementById('liveGeneratedCode');
+        const liveImagePreview = document.getElementById('liveImagePreview');
+        const liveGeneratedImage = document.getElementById('liveGeneratedImage');
+
+        // Buttons for Live Output
+        const viewCodeInModalBtn = document.getElementById('viewCodeInModalBtn');
+        const livePreviewCodeBtn = document.getElementById('livePreviewCodeBtn');
+        const viewImageInModalBtn = document.getElementById('viewImageInModalBtn');
+
+
+        // Modals and their elements
+        const codeOutputModal = document.getElementById('codeOutputModal');
+        const closeCodeModal = document.getElementById('closeCodeModal');
+        const modalGeneratedCode = document.getElementById('modalGeneratedCode');
+        const copyCodeBtn = document.getElementById('copyCodeBtn');
+        const downloadCodeBtn = document.getElementById('downloadCodeBtn');
+        const modalPreviewCodeBtn = document.getElementById('modalPreviewCodeBtn'); // Renamed for clarity
+
+        const codePreviewModal = document.getElementById('codePreviewModal');
+        const closePreviewModal = document.getElementById('closePreviewModal');
+        const previewIframe = document.getElementById('previewIframe');
+
+        const imageOutputModal = document.getElementById('imageOutputModal');
+        const closeImageModal = document.getElementById('closeImageModal');
+        const modalGeneratedImage = document.getElementById('modalGeneratedImage');
+        const modalImagePlaceholder = document.getElementById('modalImagePlaceholder');
+        const downloadImageBtn = document.getElementById('downloadImageBtn');
+        const fullscreenImageBtn = document.getElementById('fullscreenImageBtn');
+
+        // Chat History
+        let chatHistory = []; // Start with empty history for a clean slate
+        let lastGeneratedCode = ''; // To store the last generated code for modal display
+        let lastGeneratedImageUrl = ''; // To store the last generated image URL for modal display
+
+        // Helper functions
+        function scrollToBottom(element) {
+            element.scrollTop = element.scrollHeight;
+        }
+
+        function showStatus(message, isLoading = false, isError = false) {
+            statusMessage.classList.remove('hidden');
+            statusText.textContent = message;
+            if (isLoading) {
+                loadingSpinner.classList.remove('hidden');
+            } else {
+                loadingSpinner.classList.add('hidden');
+            }
+            if (isError) {
+                statusText.classList.add('text-red-400');
+            } else {
+                statusText.classList.remove('text-red-400');
+            }
+            if (!message && !isLoading && !isError) {
+                statusMessage.classList.add('hidden');
+            }
+        }
+
+        // Function to clear live output display
+        function clearLiveOutput() {
+            liveOutputDisplay.classList.add('hidden');
+            liveOutputPlaceholder.textContent = '';
+            liveCodePreview.classList.add('hidden');
+            liveGeneratedCode.textContent = '';
+            liveImagePreview.classList.add('hidden');
+            liveGeneratedImage.src = '';
+            lastGeneratedCode = '';
+            lastGeneratedImageUrl = '';
+        }
+
+        // Add message to chat display
+        function addMessage(text, sender) {
+            // Hide initial greeting when chat starts
+            initialGreeting.classList.add('hidden');
+            chatMessages.classList.remove('hidden');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'ai-message');
+
+            const messageTextSpan = document.createElement('span');
+            // Remove asterisk and extra spaces for cleaner display
+            const cleanedText = text.replace(/\* /g, '').trim(); 
+            messageTextSpan.textContent = cleanedText;
+            messageDiv.appendChild(messageTextSpan);
+
+            if (sender === 'ai') {
+                const listenButton = document.createElement('button');
+                listenButton.classList.add('listen-button');
+                listenButton.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9.383 2.083A1 1 0 0110 2a1 1 0 01.617.083l6 2A1 1 0 0117 5v10a1 1 0 01-.383.717l-6 2A1 1 0 0110 18a1 1 0 01-.617-.083l-6-2A1 1 0 013 15V5a1 1 0 01.383-.717l6-2zM4 5.91V15h6V5.91L4 5.91z" clip-rule="evenodd" />
+                    </svg>`;
+                listenButton.dataset.message = cleanedText; // Pass cleaned text for audio
+                listenButton.addEventListener('click', () => generateAudio(cleanedText));
+
+                messageDiv.appendChild(listenButton);
+            }
+
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom(chatMessages);
+        }
+
+        // Gemini API calls
+        async function callGeminiAPI(model, payload, isImageGeneration = false) {
+            let baseUrl;
+            if (isImageGeneration) {
+                baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
+            } else {
+                baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+            }
+
+            let apiUrl = baseUrl; // Start with base URL
+            // Canvas will inject the API key automatically if API_KEY is an empty string.
+            // Only append API_KEY explicitly if it has been provided by the user (i.e., not empty).
+            if (API_KEY) { 
+                apiUrl += `?key=${API_KEY}`;
+            }
+            
+            let attempts = 0;
+            const maxAttempts = 5;
+            let delay = 1000;
+
+            while (attempts < maxAttempts) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429) {
+                            attempts++;
+                            if (attempts < maxAttempts) {
+                                await new Promise(res => setTimeout(res, delay));
+                                delay *= 2;
+                                continue;
+                            }
+                        }
+                        // For 401 Unauthorized, provide specific error message
+                        if (response.status === 401) {
+                            throw new Error("Authentication failed. Please check your API key configuration.");
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error("API call failed:", error);
+                    throw error;
+                }
+            }
+            throw new Error("Max API retry attempts reached.");
+        }
+
+        // Generate chat response
+        async function generateChatResponse(prompt) {
+            clearLiveOutput(); // Clear any previous live output
+            showStatus('AI is responding...', true);
+            const currentChatForAPI = [...chatHistory, { role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: currentChatForAPI };
+
+            try {
+                const result = await callGeminiAPI('gemini-2.5-flash-preview-05-20', payload);
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const aiResponseText = result.candidates[0].content.parts[0].text;
+                    addMessage(aiResponseText, 'ai');
+                    chatHistory.push({ role: "user", parts: [{ text: prompt }] }, { role: "model", parts: [{ text: aiResponseText }] });
+                } else {
+                    addMessage('Sorry, AI could not generate a response.', 'ai');
+                }
+            } catch (error) {
+                showStatus(`Chat error: ${error.message}`, false, true);
+                addMessage(`Sorry, an error occurred during the conversation: ${error.message}`, 'ai');
+            } finally {
+                showStatus('', false);
+            }
+        }
+
+        // Generate code
+        async function generateCode(prompt) {
+            clearLiveOutput(); // Clear any previous live output
+            liveOutputDisplay.classList.remove('hidden');
+            liveOutputPlaceholder.textContent = 'Generating code...';
+            showStatus('Generating code...', true);
+
+            // Send full chat history as context for code generation
+            const contextPrompt = chatHistory.map(entry => entry.parts[0].text).join(' ') + ` ${prompt}`;
+            const finalPrompt = `Generate code for: ${contextPrompt}. Please provide only the code and no additional text. If it's HTML, CSS or JavaScript, provide it as a complete HTML file. Focus on the core request from the user and integrate any relevant details from the conversation history.`;
+            
+            const payload = { contents: [{ role: "user", parts: [{ text: finalPrompt }] }] };
+
+            try {
+                const result = await callGeminiAPI('gemini-2.5-flash-preview-05-20', payload);
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    let generatedCode = result.candidates[0].content.parts[0].text;
+
+                    if (generatedCode.startsWith('```') && generatedCode.endsWith('```')) {
+                        const firstNewline = generatedCode.indexOf('\n');
+                        const lastBackticks = generatedCode.lastIndexOf('```');
+                        if (firstNewline !== -1 && lastBackticks !== -1 && lastBackticks > firstNewline) {
+                            generatedCode = generatedCode.substring(firstNewline + 1, lastBackticks).trim();
+                        }
+                    }
+                    lastGeneratedCode = generatedCode; // Store code for modal
+                    liveGeneratedCode.textContent = generatedCode;
+                    hljs.highlightElement(liveGeneratedCode);
+                    liveCodePreview.classList.remove('hidden');
+                    liveOutputPlaceholder.classList.add('hidden');
+                    showStatus('Code generated successfully.');
+                    addMessage(`AI has generated code based on our full conversation context: ${prompt}`, 'ai');
+                    chatHistory.push({ role: "user", parts: [{ text: `Generate code for: ${prompt}` }] }, { role: "model", parts: [{ text: `Code generated for: ${prompt}` }] });
+                } else {
+                    liveOutputPlaceholder.textContent = 'Sorry, could not generate code.';
+                    showStatus('Could not generate code.', false, true);
+                    addMessage(`Sorry, AI could not generate code.`, 'ai');
+                }
+            } catch (error) {
+                liveOutputPlaceholder.textContent = `Error generating code: ${error.message}`;
+                showStatus(`Error generating code: ${error.message}`, false, true);
+                addMessage(`Sorry, an error occurred while generating code: ${error.message}`, 'ai');
+            } finally {
+                showStatus('', false);
+            }
+        }
+
+        // Generate image
+        async function generateImage(prompt) {
+            clearLiveOutput(); // Clear any previous live output
+            liveOutputDisplay.classList.remove('hidden');
+            liveOutputPlaceholder.textContent = 'Generating image... \n For better images, please provide a detailed prompt (e.g., "A deer in golden light in a forest, realistic style").';
+            showStatus('Generating image...', true);
+
+            const contextPromptForImage = chatHistory.map(entry => entry.parts[0].text).join(' ');
+            const imageGenerationPrompt = `${prompt}. ${contextPromptForImage}. Consider the full conversation context for this image. Provide a detailed, descriptive and highly specific prompt to the image generation model.`;
+
+            const payload = { instances: { prompt: imageGenerationPrompt }, parameters: { "sampleCount": 1} };
+
+            let attempts = 0;
+            const maxAttempts = 5;
+            let delay = 1000;
+
+            while (attempts < maxAttempts) {
+                try {
+                    const result = await callGeminiAPI('imagen-3.0-generate-002', payload, true);
+                    if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+                        const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                        lastGeneratedImageUrl = imageUrl; // Store image URL for modal
+                        liveGeneratedImage.src = imageUrl;
+                        liveImagePreview.classList.remove('hidden');
+                        liveOutputPlaceholder.classList.add('hidden');
+                        showStatus('Image generated successfully.');
+                        addMessage(`AI has generated an image based on our full conversation context: ${prompt}`, 'ai');
+                        chatHistory.push({ role: "user", parts: [{ text: `Generate image for: ${prompt}` }] }, { role: "model", parts: [{ text: `Image generated for: ${prompt}` }] });
+                    } else {
+                        liveOutputPlaceholder.textContent = 'Sorry, could not generate image. \n Please provide a detailed prompt.';
+                        showStatus('Could not generate image.', false, true);
+                        addMessage(`Sorry, AI could not generate image.`, 'ai');
+                    }
+                    break;
+                } catch (error) {
+                    liveOutputPlaceholder.textContent = `Error generating image: ${error.message} \n Please provide a detailed prompt.`;
+                    showStatus(`Error generating image: ${error.message}`, false, true);
+                    addMessage(`Sorry, an error occurred while generating image: ${error.message}`, 'ai');
+                    liveGeneratedImage.src = `https://placehold.co/400x300/e0e0e0/ffffff?text=Image+Error`;
+                    liveGeneratedImage.classList.remove('hidden');
+                    break;
+                } finally {
+                    showStatus('', false);
+                }
+            }
+        }
+
+        // Utility function to convert PCM to WAV
+        function pcmToWav(pcm16, sampleRate) {
+            const dataLength = pcm16.length * 2;
+            const buffer = new ArrayBuffer(44 + dataLength);
+            const view = new DataView(buffer);
+
+            let offset = 0;
+
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+
+            writeString(view, offset, 'RIFF'); offset += 4;
+            view.setUint32(offset, 36 + dataLength, true); offset += 4;
+            writeString(view, offset, 'WAVE'); offset += 4;
+
+            writeString(view, offset, 'fmt '); offset += 4;
+            view.setUint32(offset, 16, true); offset += 4;
+            view.setUint16(offset, 1, true); offset += 2;
+            view.setUint16(offset, 1, true); offset += 2;
+            view.setUint32(offset, sampleRate, true); offset += 4;
+            view.setUint32(offset, sampleRate * 2, true); offset += 4;
+            view.setUint16(offset, 2, true); offset += 2;
+            view.setUint16(offset, 16, true); offset += 2;
+
+            writeString(view, offset, 'data'); offset += 4;
+            view.setUint32(offset, dataLength, true); offset += 4;
+
+            for (let i = 0; i < pcm16.length; i++, offset += 2) {
+                view.setInt16(offset, pcm16[i], true);
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        // Utility function to convert Base64 to ArrayBuffer
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        // Generate audio
+        async function generateAudio(textToSpeak) {
+            showStatus('Generating audio...', true);
+
+            const payload = {
+                contents: [{
+                    parts: [{ text: textToSpeak }]
+                }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: "Kore" }
+                        }
+                    }
+                },
+                model: "gemini-2.5-flash-preview-tts"
+            };
+
+            try {
+                const result = await callGeminiAPI('gemini-2.5-flash-preview-tts', payload);
+                const part = result?.candidates?.[0]?.content?.parts?.[0];
+                const audioData = part?.inlineData?.data;
+                const mimeType = part?.inlineData?.mimeType;
+
+                if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                    const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                    const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 16000;
+                    const pcmData = base64ToArrayBuffer(audioData);
+                    const pcm16 = new Int16Array(pcmData);
+                    const wavBlob = pcmToWav(pcm16, sampleRate);
+                    const audioUrl = URL.createObjectURL(wavBlob);
+
+                    const audioPlayer = new Audio(audioUrl);
+                    audioPlayer.play();
+                    showStatus('Playing audio...');
+                } else {
+                    showStatus('Sorry, could not generate audio.', false, true);
+                }
+            } catch (error) {
+                showStatus(`Error generating audio: ${error.message}`, false, true);
+            } finally {
+                showStatus('', false);
+            }
+        }
+
+        // Event listeners
+        chatBtn.addEventListener('click', async () => {
+            const prompt = promptInput.value.trim();
+            if (prompt) {
+                initialGreeting.classList.add('hidden');
+                chatMessages.classList.remove('hidden');
+
+                addMessage(prompt, 'user');
+                promptInput.value = '';
+                await generateChatResponse(prompt);
+            }
+        });
+
+        generateCodeBtn.addEventListener('click', async () => {
+            const prompt = promptInput.value.trim();
+            if (prompt) {
+                initialGreeting.classList.add('hidden');
+                chatMessages.classList.remove('hidden');
+
+                addMessage(`Code generation request: ${prompt}`, 'user');
+                promptInput.value = '';
+                await generateCode(prompt);
+            } else {
+                showStatus('Please enter a prompt to generate code.', false, true);
+            }
+        });
+
+        generateImageBtn.addEventListener('click', async () => {
+            const prompt = promptInput.value.trim();
+            if (prompt) {
+                initialGreeting.classList.add('hidden');
+                chatMessages.classList.remove('hidden');
+
+                addMessage(`Image generation request: ${prompt}`, 'user');
+                promptInput.value = '';
+                await generateImage(prompt);
+            } else {
+                showStatus('Please enter a prompt to generate an image.', false, true);
+            }
+        });
+
+        promptInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                chatBtn.click();
+            }
+        });
+
+        // Live Output Buttons
+        viewCodeInModalBtn.addEventListener('click', () => {
+            if (lastGeneratedCode) {
+                codeOutputModal.classList.remove('hidden');
+                modalGeneratedCode.textContent = lastGeneratedCode;
+                hljs.highlightElement(modalGeneratedCode);
+            } else {
+                showStatus('No code has been generated.', false, true);
+            }
+        });
+
+        livePreviewCodeBtn.addEventListener('click', () => {
+            if (lastGeneratedCode.includes('<html') || lastGeneratedCode.includes('<body') || lastGeneratedCode.includes('<div')) {
+                codePreviewModal.classList.remove('hidden');
+                const iframeDoc = previewIframe.contentWindow.document;
+                iframeDoc.open();
+                iframeDoc.write(lastGeneratedCode);
+                iframeDoc.close();
+            } else {
+                showStatus('This code is not HTML, cannot preview.', false, true);
+            }
+        });
+
+        viewImageInModalBtn.addEventListener('click', () => {
+            if (lastGeneratedImageUrl) {
+                imageOutputModal.classList.remove('hidden');
+                modalGeneratedImage.src = lastGeneratedImageUrl;
+                modalImagePlaceholder.classList.add('hidden'); // Hide placeholder if image is loaded
+                imageOutputModal.querySelector('.flex.gap-3.mt-4').classList.remove('hidden'); // Show download/fullscreen buttons
+            } else {
+                showStatus('No image has been generated.', false, true);
+            }
+        });
+
+
+        // Modal close event listeners
+        closeCodeModal.addEventListener('click', () => {
+            codeOutputModal.classList.add('hidden');
+            modalGeneratedCode.textContent = ''; // Clear content
+        });
+
+        closePreviewModal.addEventListener('click', () => {
+            codePreviewModal.classList.add('hidden');
+            previewIframe.srcdoc = '';
+        });
+
+        closeImageModal.addEventListener('click', () => {
+            imageOutputModal.classList.add('hidden');
+            modalGeneratedImage.src = '';
+            modalImagePlaceholder.classList.remove('hidden');
+            imageOutputModal.querySelector('.flex.gap-3.mt-4').classList.add('hidden'); // Hide actions
+        });
+        
+        // Code action buttons within modal
+        copyCodeBtn.addEventListener('click', () => {
+            const code = modalGeneratedCode.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showStatus('Code copied!', false, false);
+            }).catch(err => {
+                showStatus('Error copying code: ' + err, false, true);
+            });
+        });
+
+        downloadCodeBtn.addEventListener('click', () => {
+            const code = modalGeneratedCode.textContent;
+            const blob = new Blob([code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            let filename = 'generated_code.txt';
+            if (code.includes('<html') || code.includes('<body')) {
+                filename = 'index.html';
+            } else if (code.includes('function') || code.includes('const')) {
+                filename = 'script.js';
+            } else if (code.includes('{') && code.includes(':')) {
+                filename = 'style.css';
+            }
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showStatus('Code downloaded!');
+        });
+
+        modalPreviewCodeBtn.addEventListener('click', () => {
+            const code = modalGeneratedCode.textContent;
+            if (code.includes('<html') || code.includes('<body') || code.includes('<div')) {
+                codePreviewModal.classList.remove('hidden');
+                const iframeDoc = previewIframe.contentWindow.document;
+                iframeDoc.open();
+                iframeDoc.write(code);
+                iframeDoc.close();
+            } else {
+                showStatus('This code is not HTML, cannot preview.', false, true);
+            }
+        });
+
+        // Image action buttons within modal
+        downloadImageBtn.addEventListener('click', () => {
+            const imageUrl = modalGeneratedImage.src;
+            if (imageUrl) {
+                const a = document.createElement('a');
+                a.href = imageUrl;
+                a.download = 'generated_image.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showStatus('Image downloaded!', false, false);
+            } else {
+                showStatus('No image to download.', false, true);
+            }
+        });
+
+        fullscreenImageBtn.addEventListener('click', () => {
+            const imageUrl = modalGeneratedImage.src;
+            if (imageUrl) {
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.style.maxWidth = '95vw';
+                img.style.maxHeight = '95vh';
+                img.style.objectFit = 'contain';
+
+                const fullscreenDiv = document.createElement('div');
+                fullscreenDiv.classList.add('modal', 'full-screen-modal');
+                fullscreenDiv.innerHTML = `
+                    <button class="close-button" id="tempCloseFullscreen">&times;</button>
+                `;
+                fullscreenDiv.appendChild(img);
+                document.body.appendChild(fullscreenDiv);
+
+                document.getElementById('tempCloseFullscreen').addEventListener('click', () => {
+                    document.body.removeChild(fullscreenDiv);
+                });
+            } else {
+                showStatus('No image to view full screen.', false, true);
+            }
+        });
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', () => {
+            initialGreeting.classList.remove('hidden');
+            chatMessages.classList.add('hidden');
+            
+            micBtn.addEventListener('click', () => {
+                showStatus('Mic functionality is not yet available.', false, true);
+            });
+            
+            hljs.highlightAll();
+        });
+    </script>
+</body>
+</html>
